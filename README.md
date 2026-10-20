@@ -1,17 +1,5 @@
-# jariyo_frontend
+# 자리요 고객 예약 앱 (Flutter)
 
-A new Flutter project.
+자리요 JA1 과제 범위의 Android 고객 앱이다. 로그인, 매장 탐색, 매장 상세·예약, 내 예약, 예약 상세 5개 페이지를 제공한다.
 
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+실행 방법은 [RUN_GUIDE.md](RUN_GUIDE.md) 를 참고한다.
