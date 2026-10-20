@@ -125,7 +125,12 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => CancelSheet(reservationId: detail.id),
+      builder: (_) => CancelSheet(
+        reservationId: detail.id,
+        onClosedResult: () {
+          if (mounted) _loadAll(reload: true);
+        },
+      ),
     );
     if (!mounted || result == null) return;
     switch (result.kind) {
@@ -457,10 +462,7 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
   Widget _actions(ReservationDetail d) {
     final children = <Widget>[];
     if (_deadlineMessage != null) {
-      children.add(MessageBanner(
-        title: _deadlineMessage!.isNotEmpty ? _deadlineMessage! : S.rdDeadlinePassed,
-        sub: d.store.phoneNumber,
-      ));
+      children.add(_deadlineBanner(_deadlineMessage!.isNotEmpty ? _deadlineMessage! : S.rdDeadlinePassed, d));
       children.add(const SizedBox(height: 16));
     }
     if (d.canCancel) {
@@ -480,12 +482,7 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
         ),
       ));
     } else if (d.status == 'CONFIRMED' && _deadlineMessage == null) {
-      children.add(MessageBanner(
-        title: S.rdDeadlinePassed,
-        sub: d.store.phoneNumber,
-        icon: Icons.info,
-        tone: BannerTone.warning,
-      ));
+      children.add(_deadlineBanner(S.rdDeadlinePassed, d));
     }
     if (d.status == 'COMPLETED' || d.status == 'CANCELLED' || d.status == 'EXPIRED') {
       children.add(PrimaryButton(
@@ -495,5 +492,44 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
       ));
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
+  }
+
+  /// 취소 가능 시간이 지난 예약: 안내 문구와 매장 전화번호.
+  Widget _deadlineBanner(String message, ReservationDetail d) {
+    final phone = d.store.phoneNumber;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9EAEA),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0x4DBA1A1A)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, color: AppColors.error, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(message, style: const TextStyle(fontSize: 15, height: 1.4, color: AppColors.text)),
+                if (phone != null && phone.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const Icon(Icons.call_outlined, size: 18, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Text(phone,
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
