@@ -7,7 +7,7 @@
 | Flutter | 3.44.1 (stable) |
 | Dart | 3.12.1 |
 | 외부 패키지 | `http` 만 사용 |
-| Android 패키지 이름 | `kr.jariyo.task.a00` (`XX` 배정 후 `android/app/build.gradle.kts` 의 `namespace`·`applicationId` 와 `MainActivity.kt` 경로를 함께 변경) |
+| Android 패키지 이름 | `kr.jariyo.task.a01` |
 
 ## API base URL
 
@@ -26,7 +26,7 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080
 
 ```bash
 flutter build apk --release --dart-define=API_BASE_URL=http://<host>:8080
-cp build/app/outputs/flutter-apk/app-release.apk XX_JARIYO.apk
+cp build/app/outputs/flutter-apk/app-release.apk 01_JARIYO.apk
 ```
 
 ## 테스트
