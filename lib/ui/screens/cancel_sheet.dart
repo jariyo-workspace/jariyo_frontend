@@ -19,7 +19,10 @@ class CancelResult {
 class CancelSheet extends StatefulWidget {
   final String reservationId;
 
-  const CancelSheet({super.key, required this.reservationId});
+  /// 요청이 끝나기 전에 시트가 닫힌 경우, 서버가 응답하면 호출된다.
+  final VoidCallback? onClosedResult;
+
+  const CancelSheet({super.key, required this.reservationId, this.onClosedResult});
 
   @override
   State<CancelSheet> createState() => _CancelSheetState();
@@ -61,12 +64,12 @@ class _CancelSheetState extends State<CancelSheet> {
     });
     try {
       await Api.cancelReservation(widget.reservationId, reason, _key!);
-      if (!mounted) return;
+      if (!mounted) return widget.onClosedResult?.call();
       Navigator.of(context).pop(const CancelResult(CancelResultKind.success));
     } on SessionExpiredException {
       return;
     } on ApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted) return widget.onClosedResult?.call();
       switch (e.code) {
         case 'RESERVATION_ALREADY_CANCELLED':
         case 'RESERVATION_INVALID_STATE':
@@ -91,6 +94,7 @@ class _CancelSheetState extends State<CancelSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // 로딩 중에도 Back은 막지 않는다. 닫은 뒤 도착한 결과는 onClosedResult로 상세에 알린다.
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
@@ -100,12 +104,20 @@ class _CancelSheetState extends State<CancelSheet> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SheetHandle(),
-            const Text(S.csTitle, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.text)),
+            const Text(
+              S.csTitle,
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.text),
+            ),
             const SizedBox(height: 12),
-            const Text('${S.csBody1}\n${S.csBody2}',
-                style: TextStyle(fontSize: 15, height: 1.5, color: AppColors.textSub)),
+            const Text(
+              '${S.csBody1}\n${S.csBody2}',
+              style: TextStyle(fontSize: 15, height: 1.5, color: AppColors.textSub),
+            ),
             const SizedBox(height: 20),
-            const Text(S.csReason, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
+            const Text(
+              S.csReason,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text),
+            ),
             const SizedBox(height: 8),
             TextField(
               controller: _reason,
@@ -125,10 +137,8 @@ class _CancelSheetState extends State<CancelSheet> {
                         borderSide: const BorderSide(color: AppColors.error, width: 2),
                       ),
               ),
-              buildCounter: (context, {required currentLength, required isFocused, maxLength}) => Text(
-                '$currentLength / $maxLength',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSub),
-              ),
+              buildCounter: (context, {required currentLength, required isFocused, maxLength}) =>
+                  Text('$currentLength / $maxLength', style: const TextStyle(fontSize: 12, color: AppColors.textSub)),
             ),
             if (_fieldError != null)
               Row(
@@ -138,10 +148,7 @@ class _CancelSheetState extends State<CancelSheet> {
                   Text(_fieldError!, style: const TextStyle(fontSize: 13, color: AppColors.error)),
                 ],
               ),
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              MessageBanner(title: _error!),
-            ],
+            if (_error != null) ...[const SizedBox(height: 12), MessageBanner(title: _error!)],
             if (_networkFailed) ...[
               const SizedBox(height: 12),
               const MessageBanner(title: S.networkError, sub: S.networkErrorSub, icon: Icons.wifi_off),
@@ -152,18 +159,13 @@ class _CancelSheetState extends State<CancelSheet> {
                 Expanded(
                   child: SecondaryButton(
                     label: S.csKeep,
-                    onPressed: () => Navigator.of(context).maybePop(),
+                    onPressed: _submitting ? null : () => Navigator.of(context).maybePop(),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _networkFailed
-                      ? PrimaryButton(
-                          label: S.retry,
-                          icon: Icons.refresh,
-                          color: AppColors.error,
-                          onPressed: _submit,
-                        )
+                      ? PrimaryButton(label: S.retry, icon: Icons.refresh, color: AppColors.error, onPressed: _submit)
                       : PrimaryButton(
                           label: S.csConfirm,
                           color: AppColors.error,
