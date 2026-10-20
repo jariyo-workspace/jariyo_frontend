@@ -181,6 +181,7 @@ class _MyReservationsScreenState extends State<MyReservationsScreen> {
     if (ok != true || !mounted) return;
     final refresh = Session.refreshToken;
     Session.clear();
+    AppNav.activeStoreId = null;
     Api.signOut(refresh);
     AppNav.toSignIn();
   }
