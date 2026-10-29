@@ -90,6 +90,14 @@ class BookingViewModel extends ViewModel {
     await loadAvailability();
   }
 
+  void setPartySize(int value) {
+    flow.partySize = value;
+    flow.clearSlot();
+    conflictMessage = null;
+    notify();
+    loadAvailability();
+  }
+
   Future<void> loadAvailability({bool silent = false}) async {
     final service = flow.service;
     if (service == null) return;
@@ -325,6 +333,23 @@ class _BookingScreenState extends State<BookingScreen> {
                 ],
               ),
             ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(AppSpace.page, 8, 8, 8),
+              child: Row(
+                children: [
+                  const Expanded(child: Text('인원', style: AppText.bodyStrong)),
+                  NumberStepper(
+                    value: flow.partySize,
+                    max: max(flow.service!.capacity, 1),
+                    unit: '명',
+                    onChanged: vm.setPartySize,
+                  ),
+                ],
+              ),
+            ),
+          ),
           _StepTitle(key: _timeKey, step: 3, title: '언제 방문하시나요?'),
           _TimeSection(vm: vm, flow: flow, onWaitlist: (o) => _openWaitlist(vm, around: o)),
         ],
@@ -347,7 +372,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   children: [
                     Text(formatDateTime(slot.startAt), style: AppText.bodyStrong),
                     Text(
-                      [service.name, ?staffName, '약 ${formatMinutes(flow.durationMinutes)}'].join(' · '),
+                      [service.name, ?staffName, '${flow.partySize}명', '약 ${formatMinutes(flow.durationMinutes)}'].join(' · '),
                       style: AppText.sub,
                     ),
                   ],

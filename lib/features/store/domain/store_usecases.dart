@@ -130,3 +130,64 @@ class RecentStores {
     await _repository.saveRecentStores(next);
   }
 }
+
+/// 실시간 예약 필터. 매장마다 서비스별 가능 시간을 조회해 조건 안의 가장 빠른 시간을 찾는다.
+///
+/// 목록 API가 가능 시간 필터를 지원하지 않으므로, 검색 결과 매장에 한해 클라이언트에서 확인한다.
+class FindAvailableTimes {
+  const FindAvailableTimes(this._repository);
+
+  static const _servicesPerStore = 3;
+  final StoreRepository _repository;
+
+  Future<Map<String, AvailabilityMatch>> call(List<StoreSummary> stores, AvailabilityFilter filter) async {
+    final entries = await Future.wait(stores.map((store) async => MapEntry(store.id, await _earliest(store.id, filter))));
+    return {
+      for (final entry in entries)
+        if (entry.value != null) entry.key: entry.value!,
+    };
+  }
+
+  Future<AvailabilityMatch?> _earliest(String storeId, AvailabilityFilter filter) async {
+    final List<ServiceItem> services;
+    try {
+      services = (await _repository.getServices(storeId)).where((s) => s.isBookable).take(_servicesPerStore).toList();
+    } on Exception {
+      return null;
+    }
+    final now = DateTime.now();
+    final matches = await Future.wait(
+      services.map((service) async {
+        try {
+          final days = await _repository.getAvailability(
+            storeId: storeId,
+            serviceId: service.id,
+            from: filter.date,
+            to: filter.date,
+            partySize: filter.partySize,
+          );
+          final slot = days
+              .expand((d) => d.slots)
+              .where(
+                (s) {
+                  final local = toStoreTime(s.startAt);
+                  return s.status == SlotStatus.available &&
+                      s.startAt.isAfter(now) &&
+                      DateTime.utc(local.year, local.month, local.day) == filter.date &&
+                      filter.dayPart.contains(local);
+                },
+              )
+              .fold<TimeSlot?>(null, (best, s) => best == null || s.startAt.isBefore(best.startAt) ? s : best);
+          return slot == null
+              ? null
+              : AvailabilityMatch(startAt: slot.startAt, serviceName: service.name, serviceId: service.id);
+        } on Exception {
+          return null;
+        }
+      }),
+    );
+    return matches
+        .whereType<AvailabilityMatch>()
+        .fold<AvailabilityMatch?>(null, (best, m) => best == null || m.startAt.isBefore(best.startAt) ? m : best);
+  }
+}

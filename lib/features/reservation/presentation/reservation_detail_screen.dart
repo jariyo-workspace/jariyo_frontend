@@ -13,7 +13,11 @@ import '../../../core/utils/external_links.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/dialogs.dart';
 import '../../../core/widgets/view_model_scope.dart';
+import '../../store/domain/store_repository.dart';
+import '../../store/domain/store_usecases.dart';
 import '../../store/presentation/store_detail_screen.dart';
+import 'booking/booking_flow.dart';
+import 'booking/booking_screen.dart';
 import '../domain/reservation_entities.dart';
 import '../domain/reservation_repository.dart';
 import '../domain/reservation_usecases.dart';
@@ -164,6 +168,24 @@ class ReservationDetailScreen extends StatelessWidget {
         confirmLabel: '매장에 전화',
       );
       if (call) await callPhone(vm.data?.reservation.store.phoneNumber);
+    }
+  }
+
+  /// 지난 예약과 같은 서비스·직원을 미리 고른 상태로 예약 화면을 연다.
+  Future<void> _rebook(BuildContext context, Reservation r) async {
+    try {
+      final store = await GetStoreDetail(GetIt.I<StoreRepository>())(r.store.id);
+      if (!context.mounted) return;
+      pushPage<void>(
+        context,
+        BookingScreen(
+          flow: BookingFlow(store: store, drafts: BookingDrafts(GetIt.I<ReservationRepository>())),
+          initialServiceId: r.service?.id,
+          initialStaffId: r.staff?.id,
+        ),
+      );
+    } on AppFailure {
+      if (context.mounted) pushPage<void>(context, StoreDetailScreen(storeId: r.store.id));
     }
   }
 
@@ -339,8 +361,8 @@ class ReservationDetailScreen extends StatelessWidget {
         r.status == ReservationStatus.expired) {
       children.add(
         AppButton(
-          label: '다시 예약',
-          onPressed: () => pushPage<void>(context, StoreDetailScreen(storeId: r.store.id)),
+          label: '같은 조건으로 다시 예약',
+          onPressed: () => _rebook(context, r),
         ),
       );
     }

@@ -352,3 +352,37 @@ class RecentStore {
   final String? lastServiceName;
   final DateTime viewedAt;
 }
+
+/// 실시간 예약 필터: 날짜·시간대·인원으로 지금 예약할 수 있는 매장만 찾는다.
+enum DayPart {
+  any('하루 종일', 0, 24),
+  morning('오전', 0, 12),
+  afternoon('오후', 12, 17),
+  evening('저녁', 17, 24);
+
+  const DayPart(this.label, this.fromHour, this.toHour);
+
+  final String label;
+  final int fromHour;
+  final int toHour;
+
+  bool contains(DateTime localTime) => localTime.hour >= fromHour && localTime.hour < toHour;
+}
+
+class AvailabilityFilter {
+  const AvailabilityFilter({required this.date, this.dayPart = DayPart.any, this.partySize = 1});
+
+  /// 매장 현지 날짜
+  final DateTime date;
+  final DayPart dayPart;
+  final int partySize;
+}
+
+/// 조건에 맞는 가장 빠른 예약 가능 시간
+class AvailabilityMatch {
+  const AvailabilityMatch({required this.startAt, required this.serviceName, required this.serviceId});
+
+  final DateTime startAt;
+  final String serviceName;
+  final String serviceId;
+}

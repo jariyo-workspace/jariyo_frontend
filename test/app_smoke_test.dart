@@ -398,6 +398,28 @@ void main() {
     await _finish(tester);
   });
 
+  testWidgets('고객: 실시간 예약 필터로 조건 안에 예약 가능한 매장만 찾는다', (tester) async {
+    await _start(tester, size: const Size(390, 844));
+    await tester.tap(find.text('탐색'));
+    await _pumpFor(tester);
+
+    // 오늘은 예약 가능한 시간이 없으므로 조건에 맞는 매장이 없다.
+    await tester.tap(find.text('실시간 예약'));
+    await _pumpFor(tester);
+    await tester.tap(find.text('예약 가능한 매장 보기'));
+    await _pumpFor(tester, 20);
+    expect(find.text('조건에 맞게 예약할 수 있는 매장이 없어요'), findsOneWidget);
+
+    // 내일로 바꾸면 가장 빠른 예약 가능 시간과 함께 매장이 보인다.
+    await tester.tap(find.textContaining('오늘 · 1명'));
+    await _pumpFor(tester);
+    await tester.tap(find.byType(ChoiceChip).at(1));
+    await tester.tap(find.text('예약 가능한 매장 보기'));
+    await _pumpFor(tester, 20);
+    expect(find.textContaining('부터 예약 가능 · 커트'), findsOneWidget);
+    await _finish(tester);
+  });
+
   testWidgets('고객: 내 예약 탭과 마이페이지를 그린다', (tester) async {
     await _start(tester, size: const Size(390, 844));
     await tester.tap(find.text('내 예약').last);

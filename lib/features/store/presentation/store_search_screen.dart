@@ -19,10 +19,16 @@ import 'store_detail_screen.dart';
 class StoreSearchViewModel extends ViewModel {
   StoreSearchViewModel(StoreRepository repository)
     : _search = SearchStores(repository),
+      _findTimes = FindAvailableTimes(repository),
       recentSearches = RecentSearches(repository),
       recentStores = RecentStores(repository);
 
   final SearchStores _search;
+  final FindAvailableTimes _findTimes;
+
+  /// 실시간 예약 필터. 설정하면 조건 안에 예약 가능한 매장만 보여준다.
+  AvailabilityFilter? availability;
+  Map<String, AvailabilityMatch> matches = {};
   final RecentSearches recentSearches;
   final RecentStores recentStores;
 
@@ -48,7 +54,16 @@ class StoreSearchViewModel extends ViewModel {
     try {
       final page = await _search(query);
       if (generation != _generation) return;
-      results = page.items;
+      final filter = availability;
+      if (filter == null) {
+        matches = {};
+        results = page.items;
+      } else {
+        matches = await _findTimes(page.items, filter);
+        if (generation != _generation) return;
+        results = page.items.where((s) => matches.containsKey(s.id)).toList()
+          ..sort((a, b) => matches[a.id]!.startAt.compareTo(matches[b.id]!.startAt));
+      }
       _cursor = page.cursor;
       hasNext = page.hasNext;
     } on AppFailure catch (failure) {
@@ -76,6 +91,18 @@ class StoreSearchViewModel extends ViewModel {
       loadingMore = false;
       notify();
     }
+  }
+
+  void setAvailability(AvailabilityFilter? filter) {
+    availability = filter;
+    search();
+  }
+
+  String get availabilityLabel {
+    final f = availability;
+    if (f == null) return '실시간 예약';
+    final day = f.date == storeToday() ? '오늘' : formatShortCalendarDate(f.date);
+    return [day, if (f.dayPart != DayPart.any) f.dayPart.label, '${f.partySize}명'].join(' · ');
   }
 
   void toggleOpenNow() {
@@ -186,13 +213,26 @@ class _StoreSearchScreenState extends State<StoreSearchScreen> {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   children: [
-                    FilterChip(label: const Text('영업 중'), selected: vm.query.openNow, onSelected: (_) => vm.toggleOpenNow()),
-                    const SizedBox(width: 8),
                     FilterChip(
-                      label: const Text('오늘 예약 가능'),
-                      selected: vm.query.availableToday,
-                      onSelected: (_) => vm.toggleAvailableToday(),
+                      avatar: Icon(
+                        Icons.event_available_rounded,
+                        size: 18,
+                        color: vm.availability == null ? AppColors.primary : Colors.white,
+                      ),
+                      label: Text(vm.availabilityLabel),
+                      selected: vm.availability != null,
+                      showCheckmark: false,
+                      onSelected: (_) async {
+                        final result = await showModalBottomSheet<_FilterResult>(
+                          context: context,
+                          isScrollControlled: true,
+                          builder: (_) => _AvailabilitySheet(initial: vm.availability),
+                        );
+                        if (result != null) vm.setAvailability(result.filter);
+                      },
                     ),
+                    const SizedBox(width: 8),
+                    FilterChip(label: const Text('영업 중'), selected: vm.query.openNow, onSelected: (_) => vm.toggleOpenNow()),
                     for (final category in vm.categories) ...[
                       const SizedBox(width: 8),
                       FilterChip(
@@ -260,6 +300,15 @@ class _StoreSearchScreenState extends State<StoreSearchScreen> {
   Widget _results(StoreSearchViewModel vm) {
     if (vm.loading && vm.results.isEmpty) return const LoadingView();
     if (vm.error != null) return ErrorView(failure: vm.error!, onRetry: vm.search);
+    if (vm.results.isEmpty && vm.availability != null) {
+      return EmptyView(
+        icon: Icons.event_busy_rounded,
+        title: '조건에 맞게 예약할 수 있는 매장이 없어요',
+        message: '다른 날짜나 시간대로 찾아보세요.',
+        actionLabel: '필터 해제',
+        onAction: () => vm.setAvailability(null),
+      );
+    }
     if (vm.results.isEmpty) {
       return const EmptyView(
         icon: Icons.search_off,
@@ -283,7 +332,11 @@ class _StoreSearchScreenState extends State<StoreSearchScreen> {
               return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()));
             }
             final store = vm.results[index];
-            return StoreCard(store: store, onTap: () => pushPage<void>(context, StoreDetailScreen(storeId: store.id)));
+            return StoreCard(
+              store: store,
+              match: vm.matches[store.id],
+              onTap: () => pushPage<void>(context, StoreDetailScreen(storeId: store.id)),
+            );
           },
         ),
       ),
@@ -292,7 +345,10 @@ class _StoreSearchScreenState extends State<StoreSearchScreen> {
 }
 
 class StoreCard extends StatelessWidget {
-  const StoreCard({super.key, required this.store, required this.onTap});
+  const StoreCard({super.key, required this.store, required this.onTap, this.match});
+
+  /// 실시간 예약 필터로 찾은 가장 빠른 예약 가능 시간
+  final AvailabilityMatch? match;
 
   final StoreSummary store;
   final VoidCallback onTap;
@@ -340,7 +396,13 @@ class StoreCard extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 4,
                       children: [
-                        if (store.nextAvailableAt != null)
+                        if (match != null)
+                          _Tag(
+                            icon: Icons.event_available_rounded,
+                            text: '${formatTime(match!.startAt)}부터 예약 가능 · ${match!.serviceName}',
+                            color: AppColors.positive,
+                          )
+                        else if (store.nextAvailableAt != null)
                           _Tag(icon: Icons.bolt, text: '가장 빠른 예약 ${formatRelative(store.nextAvailableAt!)}', color: AppColors.positive),
                         if (store.walkInEnabled == true) const _Tag(icon: Icons.directions_walk, text: '현장 대기 가능'),
                         if (store.waitlistEnabled == true) const _Tag(icon: Icons.hourglass_empty, text: '예약 대기 가능'),
@@ -370,7 +432,9 @@ class _Tag extends StatelessWidget {
     children: [
       Icon(icon, size: 14, color: color),
       const SizedBox(width: 2),
-      Text(text, style: TextStyle(fontSize: 12, color: color)),
+      Flexible(
+        child: Text(text, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: color)),
+      ),
     ],
   );
 }
@@ -391,6 +455,123 @@ class StoreAvatar extends StatelessWidget {
       child: Text(
         name.isEmpty ? '?' : name.characters.first,
         style: TextStyle(color: AppColors.primary, fontSize: size * 0.4, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class _FilterResult {
+  const _FilterResult(this.filter);
+
+  final AvailabilityFilter? filter;
+}
+
+/// 실시간 예약 필터: 날짜 · 시간대 · 인원
+class _AvailabilitySheet extends StatefulWidget {
+  const _AvailabilitySheet({this.initial});
+
+  final AvailabilityFilter? initial;
+
+  @override
+  State<_AvailabilitySheet> createState() => _AvailabilitySheetState();
+}
+
+class _AvailabilitySheetState extends State<_AvailabilitySheet> {
+  late DateTime _date = widget.initial?.date ?? storeToday();
+  late DayPart _part = widget.initial?.dayPart ?? DayPart.any;
+  late int _party = widget.initial?.partySize ?? 1;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = storeToday();
+    final dates = [for (var i = 0; i < 14; i++) today.add(Duration(days: i))];
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpace.page, 0, AppSpace.page, AppSpace.page),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('언제 방문하시나요?', style: AppText.title),
+            const SizedBox(height: 4),
+            const Text('조건 안에 바로 예약할 수 있는 매장만 보여드려요.', style: AppText.sub),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 64,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: dates.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (context, i) {
+                  final d = dates[i];
+                  final selected = d == _date;
+                  return ChoiceChip(
+                    selected: selected,
+                    showCheckmark: false,
+                    onSelected: (_) => setState(() => _date = d),
+                    label: SizedBox(
+                      width: 36,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(i == 0 ? '오늘' : weekdayShort(d), style: const TextStyle(fontSize: 12)),
+                          Text('${d.day}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text('시간대', style: AppText.bodyStrong),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final part in DayPart.values)
+                  ChoiceChip(
+                    label: Text(part.label),
+                    selected: _part == part,
+                    showCheckmark: false,
+                    onSelected: (_) => setState(() => _part = part),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                const Expanded(child: Text('인원', style: AppText.bodyStrong)),
+                NumberStepper(value: _party, unit: '명', onChanged: (v) => setState(() => _party = v)),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                if (widget.initial != null) ...[
+                  Expanded(
+                    child: AppButton(
+                      label: '해제',
+                      variant: AppButtonVariant.secondary,
+                      onPressed: () => Navigator.pop(context, const _FilterResult(null)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  flex: 2,
+                  child: AppButton(
+                    label: '예약 가능한 매장 보기',
+                    onPressed: () => Navigator.pop(
+                      context,
+                      _FilterResult(AvailabilityFilter(date: _date, dayPart: _part, partySize: _party)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
