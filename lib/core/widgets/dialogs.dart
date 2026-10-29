@@ -19,11 +19,12 @@ Future<bool> showConfirmDialog(
       title: Text(title),
       content: Text(message, style: const TextStyle(height: 1.5)),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: Text(cancelLabel)),
-        FilledButton(
-          style: destructive ? FilledButton.styleFrom(backgroundColor: AppColors.danger) : null,
-          onPressed: () => Navigator.pop(context, true),
-          child: Text(confirmLabel),
+        DialogButtons(
+          cancelLabel: cancelLabel,
+          confirmLabel: confirmLabel,
+          destructive: destructive,
+          onCancel: () => Navigator.pop(context, false),
+          onConfirm: () => Navigator.pop(context, true),
         ),
       ],
     ),
@@ -141,11 +142,12 @@ class _ReasonDialogState extends State<_ReasonDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text(widget.cancelLabel)),
-        FilledButton(
-          style: widget.destructive ? FilledButton.styleFrom(backgroundColor: AppColors.danger) : null,
-          onPressed: _reason.isEmpty ? null : () => Navigator.pop(context, _reason),
-          child: Text(widget.confirmLabel),
+        DialogButtons(
+          cancelLabel: widget.cancelLabel,
+          confirmLabel: widget.confirmLabel,
+          destructive: widget.destructive,
+          onCancel: () => Navigator.pop(context),
+          onConfirm: _reason.isEmpty ? null : () => Navigator.pop(context, _reason),
         ),
       ],
     );
@@ -205,4 +207,53 @@ Future<String?> pickHm(BuildContext context, {String? initial, String? helpText}
   );
   if (picked == null) return null;
   return '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+}
+
+/// 확인 모달 하단의 [취소 | 확인] 버튼 쌍.
+class DialogButtons extends StatelessWidget {
+  const DialogButtons({
+    super.key,
+    required this.cancelLabel,
+    required this.confirmLabel,
+    required this.onCancel,
+    required this.onConfirm,
+    this.destructive = false,
+  });
+
+  final String cancelLabel;
+  final String confirmLabel;
+  final VoidCallback onCancel;
+  final VoidCallback? onConfirm;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = Size(0, 52);
+    return Row(
+      children: [
+        Expanded(
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+              minimumSize: size,
+              backgroundColor: AppColors.background,
+              foregroundColor: AppColors.lightText,
+            ),
+            onPressed: onCancel,
+            child: Text(cancelLabel),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+              minimumSize: size,
+              backgroundColor: destructive ? AppColors.danger : null,
+            ),
+            onPressed: onConfirm,
+            child: Text(confirmLabel),
+          ),
+        ),
+      ],
+    );
+  }
 }

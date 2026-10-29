@@ -4,7 +4,6 @@ import 'package:get_it/get_it.dart';
 import '../../../app/session_controller.dart';
 import '../../../core/domain/statuses.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/dialogs.dart';
 import '../../my_page/presentation/my_page_screen.dart';
 import '../../store/domain/store_repository.dart';
 import '../../store/domain/store_usecases.dart';
@@ -97,15 +96,8 @@ class _OperatorShellState extends State<OperatorShell> {
     await pickOperatorStore(context, _session);
   }
 
-  Future<void> _toCustomer() async {
-    final ok = await showConfirmDialog(
-      context,
-      title: '고객 화면으로 전환할까요?',
-      message: '매장 운영 화면을 닫고 고객용 화면으로 이동해요.',
-      confirmLabel: '전환',
-    );
-    if (ok) await _session.enterCustomer();
-  }
+  // 언제든 다시 돌아올 수 있는 전환이라 확인 없이 바로 바꾼다.
+  Future<void> _toCustomer() => _session.enterCustomer();
 
   Widget _storeHeader({bool compact = false}) {
     return PopupMenuButton<String>(
@@ -221,6 +213,15 @@ class _OperatorShellState extends State<OperatorShell> {
                   _go(i);
                 },
               ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.swap_horiz_rounded),
+              title: const Text('고객 화면으로 전환'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _toCustomer();
+              },
+            ),
           ],
         ),
       ),

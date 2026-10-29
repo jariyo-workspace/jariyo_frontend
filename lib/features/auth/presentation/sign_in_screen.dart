@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
@@ -45,34 +43,26 @@ class _SignInScreenState extends State<SignInScreen> {
         body: SingleChildScrollView(
           child: Column(
             children: [
-              const AuthBackground(),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+                padding: EdgeInsets.fromLTRB(24, MediaQuery.paddingOf(context).top + 40, 24, 0),
                 child: AutofillGroup(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 34),
                       Row(
                         children: [
-                          Image.asset('assets/images/logo.png', width: 34),
-                          const SizedBox(width: 12),
+                          Image.asset('assets/images/logo.png', width: 32),
+                          const SizedBox(width: 10),
                           const Text(
                             'Jariyo',
-                            style: TextStyle(color: AppColors.primary, fontSize: 24, fontWeight: FontWeight.w600),
+                            style: TextStyle(color: AppColors.primary, fontSize: 24, fontWeight: FontWeight.w800),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 18),
-                      const Text(
-                        '예약도 대기도 한자리에서',
-                        style: TextStyle(color: AppColors.text, fontSize: 24, fontWeight: FontWeight.w500),
-                      ),
+                      const SizedBox(height: 28),
+                      const Text('예약도 대기도\n한자리에서', style: AppText.display),
                       const SizedBox(height: 8),
-                      const Text(
-                        '기다림은 짧게, 경험은 풍성하게.\n자리요와 함께 특별한 시간을 보내세요.',
-                        style: TextStyle(color: AppColors.lightText, fontSize: 16),
-                      ),
+                      const Text('기다림은 짧게, 경험은 풍성하게.', style: AppText.sub),
                       if (session.expiredNotice) ...[
                         const SizedBox(height: 16),
                         const NoticeBox(
@@ -81,8 +71,8 @@ class _SignInScreenState extends State<SignInScreen> {
                           message: '로그인이 만료되었어요. 다시 로그인하면 진행하던 예약을 이어서 할 수 있어요.',
                         ),
                       ],
-                      const SizedBox(height: 24),
-                      const FieldLabel('이메일'),
+                      const SizedBox(height: 32),
+                      const FieldLabel('이메일', required: false),
                       AppTextField(
                         controller: _email,
                         svg: 'email',
@@ -93,7 +83,7 @@ class _SignInScreenState extends State<SignInScreen> {
                         textInputAction: TextInputAction.next,
                       ),
                       const SizedBox(height: 12),
-                      const FieldLabel('비밀번호'),
+                      const FieldLabel('비밀번호', required: false),
                       AppTextField(
                         controller: _password,
                         svg: 'lock',
@@ -179,29 +169,6 @@ class _SignInScreenState extends State<SignInScreen> {
           style: TextStyle(height: 1.5),
         ),
         actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('확인'))],
-      ),
-    );
-  }
-}
-
-class AuthBackground extends StatelessWidget {
-  const AuthBackground({super.key, this.height = 240});
-
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return ImageFiltered(
-      imageFilter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
-      child: Container(
-        height: height,
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: const AssetImage('assets/images/background.png'),
-            fit: BoxFit.cover,
-            colorFilter: ColorFilter.mode(Colors.white.withAlpha(110), BlendMode.lighten),
-          ),
-        ),
       ),
     );
   }

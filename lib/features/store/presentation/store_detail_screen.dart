@@ -15,12 +15,12 @@ import '../../reservation/domain/reservation_entities.dart';
 import '../../reservation/domain/reservation_repository.dart';
 import '../../reservation/domain/reservation_usecases.dart';
 import '../../reservation/presentation/booking/booking_flow.dart';
-import '../../reservation/presentation/booking/service_select_screen.dart';
-import '../../reservation/presentation/booking/staff_select_screen.dart';
+import '../../reservation/presentation/booking/booking_screen.dart';
 import '../../walk_in/presentation/walk_in_register_screen.dart';
 import '../domain/store_entities.dart';
 import '../domain/store_repository.dart';
 import '../domain/store_usecases.dart';
+import 'store_search_screen.dart';
 
 class StoreDetailData {
   const StoreDetailData({required this.store, this.services = const [], this.staff = const [], this.walkIn});
@@ -95,13 +95,13 @@ class StoreDetailScreen extends StatelessWidget {
 
   void _startBooking(BuildContext context, StoreDetail store, {ServiceItem? service}) {
     if (_requireSignIn(store)) return;
-    final flow = BookingFlow(store: store, drafts: BookingDrafts(GetIt.I<ReservationRepository>()));
-    if (service != null) {
-      flow.selectService(service);
-      pushPage<void>(context, StaffSelectScreen(flow: flow));
-    } else {
-      pushPage<void>(context, ServiceSelectScreen(flow: flow));
-    }
+    pushPage<void>(
+      context,
+      BookingScreen(
+        flow: BookingFlow(store: store, drafts: BookingDrafts(GetIt.I<ReservationRepository>())),
+        initialServiceId: service?.id,
+      ),
+    );
   }
 
   void _startWalkIn(BuildContext context, StoreDetail store) {
@@ -115,7 +115,7 @@ class StoreDetailScreen extends StatelessWidget {
       create: () => StoreDetailViewModel(storeId, GetIt.I<StoreRepository>(), GetIt.I<RefreshBus>()),
       onReady: (vm) => vm.load(),
       builder: (context, vm) => Scaffold(
-        appBar: AppBar(title: Text(vm.data?.store.name ?? '매장 상세')),
+        appBar: AppBar(),
         body: LoadableBody<StoreDetailData>(
           vm: vm,
           loadingMessage: '매장 정보를 불러오고 있어요',
@@ -130,136 +130,175 @@ class StoreDetailScreen extends StatelessWidget {
     final store = data.store;
     final today = store.today;
     final todayCode = today?.dayOfWeek;
+    final (statusLabel, statusTone) = !store.isActive
+        ? (store.status.label, StatusTone.negative)
+        : store.isOpenNow
+        ? ('영업 중', StatusTone.positive)
+        : ('영업 전·종료', StatusTone.neutral);
     return ListView(
-      padding: EdgeInsets.zero,
+      padding: const EdgeInsets.fromLTRB(AppSpace.page, 0, AppSpace.page, 32),
       children: [
-        Container(
-          height: 140,
-          decoration: const BoxDecoration(
-            image: DecorationImage(image: AssetImage('assets/images/background.png'), fit: BoxFit.cover),
-          ),
-          alignment: Alignment.bottomLeft,
-          padding: const EdgeInsets.all(16),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(100)),
-            child: Text(
-              !store.isActive ? store.status.label : (store.isOpenNow ? '지금 영업 중' : '영업 시간이 아니에요'),
-              style: TextStyle(
-                color: !store.isActive
-                    ? AppColors.danger
-                    : (store.isOpenNow ? AppColors.positive : AppColors.lightText),
-                fontWeight: FontWeight.w600,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  StatusBadge(label: statusLabel, tone: statusTone),
+                  const SizedBox(height: 8),
+                  Text(store.name, style: AppText.display),
+                  if (today != null) ...[
+                    const SizedBox(height: 4),
+                    Text('오늘 ${today.hoursLabel}', style: AppText.sub),
+                  ],
+                ],
               ),
             ),
-          ),
+            const SizedBox(width: 12),
+            StoreAvatar(name: store.name, size: 64),
+          ],
         ),
-        Padding(
-          padding: const EdgeInsets.all(20),
+        if (store.description.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(store.description, style: AppText.body),
+        ],
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            _ActionTile(icon: Icons.call_rounded, label: '전화', onTap: () => callPhone(store.phoneNumber)),
+            const SizedBox(width: 8),
+            _ActionTile(
+              icon: Icons.map_rounded,
+              label: '길찾기',
+              onTap: () => openMap(store.address, name: store.name),
+            ),
+          ],
+        ),
+        if (store.status == StoreStatus.temporarilyClosed) ...[
+          const SizedBox(height: 12),
+          const NoticeBox(
+            icon: Icons.event_busy_rounded,
+            color: AppColors.danger,
+            message: '매장이 임시 휴무 중이에요. 지금은 예약과 현장 대기를 받을 수 없어요.',
+          ),
+        ],
+        if (store.offersWalkIn && data.walkIn != null) ...[
+          const SectionTitle('현장 대기'),
+          _WalkInStatusCard(status: data.walkIn!),
+        ],
+        const SectionTitle('서비스'),
+        if (data.services.isEmpty)
+          const NoticeBox(message: '등록된 서비스가 없어요.')
+        else
+          Card(
+            child: Column(
+              children: [
+                for (var i = 0; i < data.services.length; i++) ...[
+                  if (i > 0) const Divider(indent: 20, endIndent: 20),
+                  _ServiceRow(
+                    service: data.services[i],
+                    onTap: store.canBook && data.services[i].isBookable
+                        ? () => _startBooking(context, store, service: data.services[i])
+                        : null,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        if (data.staff.isNotEmpty) ...[
+          const SectionTitle('직원'),
+          SizedBox(
+            height: 92,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
+              itemCount: data.staff.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final member = data.staff[index];
+                return Container(
+                  width: 84,
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: AppColors.primarySoft,
+                        child: Text(
+                          member.displayName.isEmpty ? '?' : member.displayName.characters.first,
+                          style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        member.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      if (!member.bookingEnabled) const Text('예약 불가', style: AppText.caption),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+        const SectionTitle('매장 정보'),
+        SectionCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(store.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.text)),
-              if (store.description.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(store.description, style: const TextStyle(color: AppColors.lightText, height: 1.4)),
-              ],
-              const SizedBox(height: 12),
-              _LinkRow(icon: Icons.place_outlined, text: store.address, onTap: () => openMap(store.address, name: store.name)),
-              _LinkRow(icon: Icons.call_outlined, text: store.phoneNumber, onTap: () => callPhone(store.phoneNumber)),
-              if (today != null) _LinkRow(icon: Icons.schedule, text: '오늘 ${today.hoursLabel}'),
-              if (store.status == StoreStatus.temporarilyClosed) ...[
-                const SizedBox(height: 12),
-                const NoticeBox(
-                  icon: Icons.event_busy,
-                  color: AppColors.danger,
-                  message: '매장이 임시 휴무 중이에요. 지금은 예약과 현장 대기를 받을 수 없어요.',
-                ),
-              ],
-              if (store.offersWalkIn && data.walkIn != null) ...[
-                const SectionTitle('현장 대기'),
-                _WalkInStatusCard(status: data.walkIn!),
-              ],
-              const SectionTitle('서비스'),
-              if (data.services.isEmpty)
-                const Text('등록된 서비스가 없어요.', style: TextStyle(color: AppColors.lightText))
-              else
-                for (final service in data.services) ...[
-                  ServiceCard(
-                    service: service,
-                    onTap: store.canBook && service.isBookable
-                        ? () => _startBooking(context, store, service: service)
-                        : null,
+              InfoRow(label: '주소', value: store.address),
+              InfoRow(label: '전화', value: store.phoneNumber),
+              const Divider(height: 24),
+              for (final day in store.businessHours)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Text(
+                        dayOfWeekLabel(day.dayOfWeek),
+                        style: TextStyle(
+                          fontWeight: day.dayOfWeek == todayCode ? FontWeight.w700 : FontWeight.w400,
+                          color: day.dayOfWeek == todayCode ? AppColors.primary : AppColors.lightText,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        day.hoursLabel,
+                        style: TextStyle(
+                          color: day.isClosed ? AppColors.danger : AppColors.text,
+                          fontWeight: day.dayOfWeek == todayCode ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                ],
-              if (data.staff.isNotEmpty) ...[
-                const SectionTitle('직원'),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final member in data.staff)
-                      Chip(
-                        avatar: CircleAvatar(
-                          backgroundColor: AppColors.primary.withAlpha(30),
-                          child: Text(
-                            member.displayName.isEmpty ? '?' : member.displayName.characters.first,
-                            style: const TextStyle(fontSize: 12, color: AppColors.primary),
-                          ),
-                        ),
-                        label: Text(member.bookingEnabled ? member.displayName : '${member.displayName} (예약 불가)'),
-                      ),
-                  ],
                 ),
-              ],
-              const SectionTitle('영업시간'),
-              SectionCard(
-                child: Column(
-                  children: [
-                    if (store.businessHours.isEmpty)
-                      const Text('영업시간 정보가 없어요.', style: TextStyle(color: AppColors.lightText)),
-                    for (final day in store.businessHours)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 72,
-                              child: Text(
-                                dayOfWeekLabel(day.dayOfWeek),
-                                style: TextStyle(
-                                  fontWeight: day.dayOfWeek == todayCode ? FontWeight.w700 : FontWeight.w400,
-                                  color: day.dayOfWeek == todayCode ? AppColors.primary : AppColors.text,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                day.hoursLabel,
-                                style: TextStyle(color: day.isClosed ? AppColors.danger : AppColors.text),
-                              ),
-                            ),
-                          ],
-                        ),
+            ],
+          ),
+        ),
+        const SectionTitle('예약 및 취소 정책'),
+        SectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final sentence in store.policy.customerSentences)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 3),
+                        child: Icon(Icons.check_rounded, size: 16, color: AppColors.primary),
                       ),
-                  ],
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(sentence, style: AppText.body)),
+                    ],
+                  ),
                 ),
-              ),
-              const SectionTitle('예약 및 취소 정책'),
-              SectionCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final sentence in store.policy.customerSentences)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: Text('• $sentence', style: const TextStyle(height: 1.4)),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -270,60 +309,104 @@ class StoreDetailScreen extends StatelessWidget {
   Widget? _bottom(BuildContext context, StoreDetailData data) {
     final store = data.store;
     final walkInOpen = data.walkIn?.acceptingEntries ?? true;
-    final buttons = <Widget>[
-      AppButton(label: '예약하기', onPressed: store.canBook ? () => _startBooking(context, store) : null),
-      if (store.offersWalkIn)
-        AppButton(
-          label: walkInOpen ? '현장 대기 등록' : '현장 대기 마감',
-          variant: AppButtonVariant.secondary,
-          onPressed: store.isActive && walkInOpen ? () => _startWalkIn(context, store) : null,
-        ),
-    ];
+    final book = AppButton(label: '예약하기', onPressed: store.canBook ? () => _startBooking(context, store) : null);
+    if (!store.offersWalkIn) return BottomActionBar(children: [book]);
     return BottomActionBar(
       children: [
-        if (buttons.length == 1)
-          buttons.first
-        else
-          Row(
-            children: [
-              Expanded(child: buttons[0]),
-              const SizedBox(width: 8),
-              Expanded(child: buttons[1]),
-            ],
-          ),
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: AppButton(
+                label: walkInOpen ? '현장 대기' : '대기 마감',
+                variant: AppButtonVariant.secondary,
+                onPressed: store.isActive && walkInOpen ? () => _startWalkIn(context, store) : null,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(flex: 3, child: book),
+          ],
+        ),
       ],
     );
   }
 }
 
-class _LinkRow extends StatelessWidget {
-  const _LinkRow({required this.icon, required this.text, this.onTap});
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({required this.icon, required this.label, required this.onTap});
 
   final IconData icon;
-  final String text;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 20, color: AppColors.text),
+              const SizedBox(width: 6),
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _ServiceRow extends StatelessWidget {
+  const _ServiceRow({required this.service, this.onTap});
+
+  final ServiceItem service;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    if (text.isEmpty) return const SizedBox.shrink();
+    final enabled = onTap != null;
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: AppColors.lightText),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                text,
-                style: TextStyle(
-                  color: onTap == null ? AppColors.text : AppColors.primary,
-                  decoration: onTap == null ? null : TextDecoration.underline,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpace.page, vertical: 16),
+        child: Opacity(
+          opacity: enabled ? 1 : 0.45,
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(service.name, style: AppText.bodyStrong),
+                    const SizedBox(height: 2),
+                    Text(
+                      !service.isActive
+                          ? '지금은 예약을 받지 않아요'
+                          : [
+                              '약 ${formatMinutes(service.durationMinutes)}',
+                              if (service.description.isNotEmpty) service.description,
+                            ].join(' · '),
+                      style: AppText.sub,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+              if (enabled)
+                const Text(
+                  '예약',
+                  style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -339,16 +422,23 @@ class _WalkInStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!status.acceptingEntries) {
       return const NoticeBox(
-        icon: Icons.do_not_disturb_on_outlined,
+        icon: Icons.do_not_disturb_on_rounded,
         message: '오늘 현장 대기가 마감되었어요.\n예약 가능한 시간을 확인해 보세요.',
       );
     }
     return SectionCard(
       child: Row(
         children: [
-          Expanded(child: _Figure(label: '현재 대기', value: '${status.waitingCount}팀')),
-          Expanded(child: _Figure(label: '예상 대기', value: '약 ${formatMinutes(status.estimatedWaitMinutes)}')),
-          if (status.lastEntryAt != null) Expanded(child: _Figure(label: '접수 마감', value: formatHm(status.lastEntryAt))),
+          Expanded(
+            child: _Figure(label: '지금 대기', value: '${status.waitingCount}팀'),
+          ),
+          Expanded(
+            child: _Figure(label: '예상 대기', value: formatMinutes(status.estimatedWaitMinutes)),
+          ),
+          if (status.lastEntryAt != null)
+            Expanded(
+              child: _Figure(label: '접수 마감', value: formatHm(status.lastEntryAt)),
+            ),
         ],
       ),
     );
@@ -364,9 +454,9 @@ class _Figure extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      Text(label, style: const TextStyle(color: AppColors.lightText, fontSize: 13)),
+      Text(label, style: AppText.caption),
       const SizedBox(height: 4),
-      Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+      Text(value, style: AppText.section),
     ],
   );
 }

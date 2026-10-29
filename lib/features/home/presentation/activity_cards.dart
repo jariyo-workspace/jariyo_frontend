@@ -53,19 +53,18 @@ class _ActivityCard extends StatelessWidget {
     final color = AppColors.forTone(tone);
     return Card(
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: highlight ? color : AppColors.border, width: highlight ? 2 : 1),
+        borderRadius: BorderRadius.circular(AppSpace.cardRadius),
+        side: highlight ? BorderSide(color: color, width: 1.5) : BorderSide.none,
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(18),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(backgroundColor: color.withAlpha(24), child: Icon(icon, color: color)),
-              const SizedBox(width: 12),
+              IconTile(icon: icon, color: color),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,20 +72,15 @@ class _ActivityCard extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                          ),
+                          child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.bodyStrong),
                         ),
+                        const SizedBox(width: 8),
                         StatusBadge(label: badge, tone: tone),
                       ],
                     ),
                     const SizedBox(height: 4),
-                    for (final line in lines.where((l) => l.isNotEmpty))
-                      Text(line, style: const TextStyle(color: AppColors.lightText, height: 1.4)),
-                    ?trailing,
+                    for (final line in lines.where((l) => l.isNotEmpty)) Text(line, style: AppText.sub),
+                    if (trailing != null) ...[const SizedBox(height: 6), trailing!],
                   ],
                 ),
               ),

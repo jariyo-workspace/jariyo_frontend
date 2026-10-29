@@ -85,7 +85,14 @@ class SignUpViewModel extends ViewModel {
     phoneError = AccountRules.validatePhone(phoneDigits);
     agreementError = agreeTerms && agreePrivacy ? null : '이용약관과 개인정보 처리방침에 동의해야 가입할 수 있어요.';
     notify();
-    if ([emailError, passwordError, passwordConfirmError, nameError, phoneError, agreementError].any((e) => e != null)) {
+    if ([
+      emailError,
+      passwordError,
+      passwordConfirmError,
+      nameError,
+      phoneError,
+      agreementError,
+    ].any((e) => e != null)) {
       return;
     }
     await runAction(

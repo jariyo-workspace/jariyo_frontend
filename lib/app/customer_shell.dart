@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get_it/get_it.dart';
 
 import '../core/error/app_failure.dart';
@@ -16,8 +15,7 @@ import '../features/reservation/domain/reservation_entities.dart';
 import '../features/reservation/domain/reservation_repository.dart';
 import '../features/reservation/domain/reservation_usecases.dart';
 import '../features/reservation/presentation/booking/booking_flow.dart';
-import '../features/reservation/presentation/booking/service_select_screen.dart';
-import '../features/reservation/presentation/booking/time_select_screen.dart';
+import '../features/reservation/presentation/booking/booking_screen.dart';
 import '../features/reservation/presentation/reservation_detail_screen.dart';
 import '../features/store/domain/store_repository.dart';
 import '../features/store/domain/store_usecases.dart';
@@ -78,72 +76,22 @@ class _CustomerShellState extends State<CustomerShell> {
       if (mounted) pushPage<void>(context, WalkInRegisterScreen(storeId: draft.storeId));
       return;
     }
-    final stores = GetIt.I<StoreRepository>();
     try {
-      final store = await GetStoreDetail(stores)(draft.storeId);
-      final flow = BookingFlow(store: store, drafts: _drafts);
-      final serviceId = draft.serviceId;
-      if (serviceId != null) {
-        final services = await GetStoreServices(stores)(draft.storeId);
-        final service = services.where((s) => s.id == serviceId && s.isBookable).firstOrNull;
-        if (service != null) {
-          flow.selectService(service);
-          final staffId = draft.staffId;
-          if (staffId != null) {
-            final staff = await GetServiceStaff(stores)(draft.storeId, serviceId);
-            flow.selectStaff(staff.where((s) => s.id == staffId && s.bookingEnabled).firstOrNull);
-          }
-          if (mounted) pushPage<void>(context, TimeSelectScreen(flow: flow));
-          return;
-        }
-      }
-      if (mounted) pushPage<void>(context, ServiceSelectScreen(flow: flow));
+      final store = await GetStoreDetail(GetIt.I<StoreRepository>())(draft.storeId);
+      if (!mounted) return;
+      // 저장해 둔 서비스와 직원을 미리 고른 상태로 예약 화면을 연다.
+      pushPage<void>(
+        context,
+        BookingScreen(
+          flow: BookingFlow(store: store, drafts: _drafts),
+          initialServiceId: draft.serviceId,
+          initialStaffId: draft.staffId,
+        ),
+      );
     } on AppFailure catch (failure) {
       AppMessenger.showFailure(failure);
       if (mounted) pushPage<void>(context, StoreDetailScreen(storeId: draft.storeId));
     }
-  }
-
-  void _openQuickActions() {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.event_available, color: AppColors.primary),
-              title: const Text('예약하기'),
-              subtitle: const Text('매장을 찾아 예약해요'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _select(1);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.qr_code_scanner, color: AppColors.primary),
-              title: const Text('현장 대기 등록'),
-              subtitle: const Text('매장의 QR 코드를 스캔해요'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _scanWalkInQr();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.how_to_reg, color: AppColors.primary),
-              title: const Text('QR 체크인'),
-              subtitle: const Text('매장에 도착했다면 체크인 QR을 스캔해요'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _scanCheckInQr();
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
   }
 
   bool _requireSignIn() {
@@ -195,53 +143,42 @@ class _CustomerShellState extends State<CustomerShell> {
     }
   }
 
-  Widget _icon(String name, int index) => SvgPicture.asset(
-    'assets/icons/$name.svg',
-    colorFilter: ColorFilter.mode(_index == index ? AppColors.primary : AppColors.text, BlendMode.srcIn),
-  );
-
   @override
   Widget build(BuildContext context) {
+    const tabs = [
+      (Icons.home_outlined, Icons.home_rounded, '홈'),
+      (Icons.search_rounded, Icons.search_rounded, '탐색'),
+      (Icons.confirmation_number_outlined, Icons.confirmation_number_rounded, '내 예약'),
+      (Icons.person_outline_rounded, Icons.person_rounded, '마이'),
+    ];
     return Scaffold(
       body: IndexedStack(
         index: _index,
         children: [
-          HomeScreen(onOpenSearch: () => _select(1), onOpenActivity: () => _select(3), onScanQr: _scanWalkInQr),
+          HomeScreen(
+            onOpenSearch: () => _select(1),
+            onOpenActivity: () => _select(2),
+            onScanQr: _scanWalkInQr,
+            onScanCheckIn: _scanCheckInQr,
+          ),
           const StoreSearchScreen(),
-          const SizedBox.shrink(),
           MyActivityScreen(onFindStore: () => _select(1)),
           const MyPageScreen(),
         ],
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(border: Border(top: BorderSide(color: AppColors.text.withAlpha(10)))),
-        child: Theme(
-          data: Theme.of(context).copyWith(splashColor: Colors.transparent, highlightColor: Colors.transparent),
-          child: BottomNavigationBar(
-            type: BottomNavigationBarType.fixed,
-            currentIndex: _index,
-            onTap: (value) => value == 2 ? _openQuickActions() : _select(value),
-            backgroundColor: Colors.white,
-            selectedItemColor: AppColors.primary,
-            unselectedItemColor: AppColors.text,
-            items: [
-              BottomNavigationBarItem(icon: _icon('home', 0), label: '홈'),
-              BottomNavigationBarItem(icon: _icon('search', 1), label: '탐색'),
-              BottomNavigationBarItem(
-                icon: Container(
-                  width: 50,
-                  height: 50,
-                  decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.add, color: Colors.white, semanticLabel: '빠른 실행'),
-                ),
-                label: '',
-              ),
-              BottomNavigationBarItem(icon: _icon('ticket', 3), label: '내 예약'),
-              BottomNavigationBarItem(icon: _icon('person', 4), label: '마이페이지'),
-            ],
-          ),
-        ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: _select,
+        height: 68,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        destinations: [
+          for (final (icon, selected, label) in tabs)
+            NavigationDestination(
+              icon: Icon(icon, color: AppColors.mutedText),
+              selectedIcon: Icon(selected, color: AppColors.primary),
+              label: label,
+            ),
+        ],
       ),
     );
   }
