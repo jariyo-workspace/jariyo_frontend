@@ -1,29 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'core/strings.dart';
-import 'core/theme.dart';
-import 'ui/app_nav.dart';
-import 'ui/screens/sign_in_screen.dart';
+import 'app/injector.dart';
+import 'app/jariyo_app.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  AppNav.init();
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    // 운영자 화면은 태블릿 가로 모드를 지원한다.
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
+  await configureDependencies();
   runApp(const JariyoApp());
-}
-
-class JariyoApp extends StatelessWidget {
-  const JariyoApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: S.appName,
-      debugShowCheckedModeBanner: false,
-      navigatorKey: AppNav.navigatorKey,
-      theme: buildTheme(),
-      home: const SignInScreen(),
-    );
-  }
 }

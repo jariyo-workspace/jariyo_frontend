@@ -4,4 +4,6 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 로컬 개발 서버(http://10.0.2.2) 접속 허용 -->
+    <application android:usesCleartextTraffic="true"/>
 </manifest>
