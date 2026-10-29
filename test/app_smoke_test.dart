@@ -350,7 +350,7 @@ void main() {
     final backend = await _start(tester, size: const Size(390, 844));
 
     // 통합 홈 API가 없으면 목록 API로 홈을 구성하고, 빈자리 제안을 가장 먼저 강조한다.
-    expect(find.text('안녕하세요, 김자리님'), findsOneWidget);
+    expect(find.textContaining('김자리님'), findsOneWidget);
     expect(find.text('빈자리가 생겼어요'), findsWidgets);
     expect(backend.requests, contains('GET /me/slot-offers'));
 
@@ -358,16 +358,16 @@ void main() {
     await _pumpFor(tester);
     await tester.tap(find.text('자리요 헤어').last);
     await _pumpFor(tester, 20);
-    expect(find.text('예약 및 취소 정책'), findsOneWidget);
+    expect(find.text('길찾기'), findsOneWidget);
 
     await tester.tap(find.text('예약하기').last);
     await _pumpFor(tester);
-    expect(find.text('현재 예약을 받지 않는 서비스예요'), findsOneWidget, reason: '비활성 서비스는 선택할 수 없게 표시한다');
-    await tester.tap(find.text('커트').first);
-    await _pumpFor(tester);
-
-    await tester.tap(find.text('가능한 직원 누구나'));
+    // 서비스·직원·시간을 한 화면에서 고른다. 비활성 서비스는 선택할 수 없게 표시한다.
+    expect(find.text('지금은 예약을 받지 않아요'), findsOneWidget);
+    // 예약 가능한 서비스가 하나뿐이면 미리 골라 두고 바로 시간 선택으로 안내한다.
     await _pumpFor(tester, 20);
+    expect(find.text('시간을 골라 주세요'), findsOneWidget);
+    expect(find.text('누구나'), findsOneWidget);
     expect(find.text('가장 빠른 예약 가능 시간'), findsOneWidget);
 
     await tester.tap(find.text('가장 빠른 예약 가능 시간'));
@@ -405,7 +405,7 @@ void main() {
     expect(find.textContaining('예정'), findsWidgets);
     await tester.tap(find.textContaining('대기').first);
     await _pumpFor(tester);
-    await tester.tap(find.text('마이페이지'));
+    await tester.tap(find.text('마이'));
     await _pumpFor(tester);
     expect(find.text('매장 운영 화면으로 전환'), findsOneWidget);
     await _finish(tester);
