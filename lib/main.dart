@@ -1,21 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:jariyo_frontend/screen/sign_in.dart';
 
-void main() async {
+import 'core/strings.dart';
+import 'core/theme.dart';
+import 'ui/app_nav.dart';
+import 'ui/screens/sign_in_screen.dart';
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([.portraitUp]);
-  runApp(
-    MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: SignInScreen(),
-      theme: ThemeData(
-        colorSchemeSeed: primaryColor,
-      ),
-    )
-  );
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  AppNav.init();
+  runApp(const JariyoApp());
 }
 
-Color lightTextColor = Color(0xff434654);
-Color textColor = Color(0xff191C1D);
-Color primaryColor = Color(0xff003FB1);
+class JariyoApp extends StatelessWidget {
+  const JariyoApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: S.appName,
+      debugShowCheckedModeBanner: false,
+      navigatorKey: AppNav.navigatorKey,
+      theme: buildTheme(),
+      home: const SignInScreen(),
+    );
+  }
+}
