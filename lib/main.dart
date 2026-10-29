@@ -1,21 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:jariyo_frontend/screen/sign_in.dart';
 
-void main() async {
+import 'app/injector.dart';
+import 'app/jariyo_app.dart';
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([.portraitUp]);
-  runApp(
-    MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: SignInScreen(),
-      theme: ThemeData(
-        colorSchemeSeed: primaryColor,
-      ),
-    )
-  );
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    // 운영자 화면은 태블릿 가로 모드를 지원한다.
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
+  await configureDependencies();
+  runApp(const JariyoApp());
 }
-
-Color lightTextColor = Color(0xff434654);
-Color textColor = Color(0xff191C1D);
-Color primaryColor = Color(0xff003FB1);
